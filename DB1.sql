@@ -180,11 +180,11 @@ CREATE TABLE IF NOT EXISTS acceptance_act(
 TRUNCATE TABLE acceptance_act RESTART IDENTITY;
 --Список изданий на приём
 CREATE TABLE IF NOT EXISTS pub_list_for_accept(
-    act_id INT GENERATED ALWAYS AS IDENTITY  (START WITH 1) NOT NULL,
+    act_id INT NOT NULL,
 	isbn ISBN NOT NULL,
 	num INTEGER NOT NULL CHECK(num > 0),
 	PRIMARY KEY(act_id, isbn),
 	FOREIGN KEY(act_id) REFERENCES acceptance_act,
 	FOREIGN KEY(isbn) REFERENCES publicat
 );
-TRUNCATE TABLE pub_list_for_accept RESTART IDENTITY;
+--TRUNCATE TABLE pub_list_for_accept RESTART IDENTITY;

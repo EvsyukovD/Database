@@ -21,7 +21,8 @@ DROP PROCEDURE IF EXISTS
 	 debit_publication,
 	 add_publication;
 DROP PROCEDURE IF EXISTS
-	 process_proposal;
+	 process_proposal,
+	 process_proposal_2;
 DROP FUNCTION IF EXISTS
      isbn_equals;
 DROP TYPE IF EXISTS

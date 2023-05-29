@@ -1,6 +1,7 @@
 DROP FUNCTION IF EXISTS
 	trigger_debit_act_before_insert,
-	trigger_pub_in_order_list_before_insert;
+	trigger_pub_in_order_list_before_insert,
+	trigger_publicat_after_acceptance_list_insert;
 --Проверка возможности списания литературы
 CREATE FUNCTION trigger_debit_act_before_insert() RETURNS trigger AS $$
 DECLARE
@@ -69,3 +70,17 @@ CREATE OR REPLACE TRIGGER litOrderInsert
 BEFORE INSERT ON pub_in_order_list
 FOR EACH ROW
 EXECUTE PROCEDURE trigger_pub_in_order_list_before_insert();
+
+--Обновление числа книг в библиотеке
+CREATE OR REPLACE FUNCTION trigger_publicat_after_acceptance_list_insert() RETURNS trigger AS
+$$
+BEGIN
+	update publicat set lib_count = (lib_count + NEW.num)
+	where isbn_equals(isbn,NEW.isbn);
+	RETURN NEW;
+END;
+$$ LANGUAGE 'plpgsql';
+CREATE OR REPLACE TRIGGER publicatUpdate 
+AFTER INSERT ON pub_list_for_accept
+FOR EACH ROW
+EXECUTE PROCEDURE trigger_publicat_after_acceptance_list_insert();

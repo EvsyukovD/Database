@@ -137,17 +137,17 @@ declare
 begin
 	 select p1.*
 	 into tmp
-	 from pub_list_from_proposal p1,pub_in_order_list
+	 from pub_list_from_proposal p1
 	 where exists(
 			select p2.isbn from pub_list_from_proposal p2
 			where p2.isbn in(
 			      select isbn
 				  from pub_list_from_sales_dep
 				  where department_id = dep_id
-			 ) 
+			 )
 			 and p2.proposal_counter = p1.proposal_counter
 	 ) 
-	 and p1.proposal_counter != pub_in_order_list.proposal_counter;
+	 and p1.proposal_counter not in (select proposal_counter from pub_in_order_list);
      if not found then
 	    raise notice 'Respective proposals do not exists';
 		return;
@@ -157,7 +157,7 @@ begin
 	returning order_id into last_order_id;
     with 
 	full_proposals as (
-    	select proposal_counter 
+    	select distinct proposal_counter 
 		from pub_list_from_proposal p1
 		where not exists(
 			 select isbn from pub_list_from_proposal p2
@@ -170,9 +170,9 @@ begin
 		)
 	), -- заявки, в которых все издания продаются в отделе с номером dep_id
 	_open as (
-	     select pub_list_from_proposal.proposal_counter 
-		 from pub_list_from_proposal,pub_in_order_list
-		 where pub_list_from_proposal.proposal_counter != pub_in_order_list.proposal_counter
+	     select distinct pub_list_from_proposal.proposal_counter 
+		 from pub_list_from_proposal
+		 where pub_list_from_proposal.proposal_counter not in (select proposal_counter from pub_in_order_list)
 	),--все необработанные заявки
 	open_and_full as(
 	    select proposal_counter 
@@ -186,4 +186,91 @@ begin
 	)
 	insert into pub_in_order_list(order_id,isbn,proposal_counter,num)
 	(select last_order_id, S.isbn,S.proposal_counter,S.num from S);
+	
+	for i in (select p1.* 
+		 from pub_list_from_proposal p1
+         where
+		 p1.isbn in (select isbn from pub_list_from_sales_dep where department_id = dep_id)
+		 and not exists(select * from pub_in_order_list p2 
+						where p2.proposal_counter = p1.proposal_counter
+					          and isbn_equals(p2.isbn,p1.isbn)))
+    loop
+		insert into pub_in_order_list(order_id,isbn,proposal_counter,num)
+		values(last_order_id, i.isbn,i.proposal_counter,i.num);
+	end loop;
+end;$$;
+
+
+--Обработка заявок
+CREATE PROCEDURE process_proposal_2(dep_id int,user_id int,_create_date timestamp,_pay_date timestamp)
+language plpgsql    
+as $$
+declare
+   last_order_id int;
+   i RECORD;
+   tmp RECORD;
+begin
+	 select p1.*
+	 into tmp
+	 from pub_list_from_proposal p1
+	 where exists(
+			select p2.isbn from pub_list_from_proposal p2
+			where p2.isbn in(
+			      select isbn
+				  from pub_list_from_sales_dep
+				  where department_id = dep_id
+			 )
+			 and p2.proposal_counter = p1.proposal_counter
+	 ) 
+	 and p1.proposal_counter not in (select proposal_counter from pub_in_order_list);
+     if not found then
+	    raise notice 'Respective proposals do not exists';
+		return;
+	 end if;
+	insert into lit_order(creating_date, pay_date, user_id, department_id)
+	values(_create_date,_pay_date,user_id,dep_id) 
+	returning order_id into last_order_id;
+    with 
+	full_proposals as (
+    	select distinct proposal_counter 
+		from pub_list_from_proposal p1
+		where not exists(
+			 select isbn from pub_list_from_proposal p2
+			 where isbn not in(
+			      select isbn
+				  from pub_list_from_sales_dep
+				  where department_id = dep_id
+			 ) 
+			 and p2.proposal_counter = p1.proposal_counter
+		)
+	), -- заявки, в которых все издания продаются в отделе с номером dep_id
+	_open as (
+	     select distinct pub_list_from_proposal.proposal_counter 
+		 from pub_list_from_proposal
+		 where pub_list_from_proposal.proposal_counter not in (select proposal_counter from pub_in_order_list)
+	),--все необработанные заявки
+	open_and_full as(
+	    select proposal_counter 
+		from _open
+		where proposal_counter in (select * from full_proposals)
+	),
+	S as (
+	  select * 
+			  from  pub_list_from_proposal
+			  where proposal_counter in (select proposal_counter from open_and_full)
+	)
+	insert into pub_in_order_list(order_id,isbn,proposal_counter,num)
+	(select last_order_id, S.isbn,S.proposal_counter,S.num from S);
+	
+	for i in (select p1.* 
+		 from pub_list_from_proposal p1
+         where
+		 p1.isbn in (select isbn from pub_list_from_sales_dep where department_id = dep_id)
+		 and not exists(select * from pub_in_order_list p2 
+						where p2.proposal_counter = p1.proposal_counter
+					          and isbn_equals(p2.isbn,p1.isbn)))
+    loop
+		insert into pub_in_order_list(order_id,isbn,proposal_counter,num)
+		values(last_order_id, i.isbn,i.proposal_counter,i.num);
+	end loop;
 end;$$;
